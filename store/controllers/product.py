@@ -26,18 +26,40 @@ async def get(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=exc.message)
 
 
-@router.get(path="/", status_code=status.HTTP_200_OK)
-async def query(usecase: ProductUsecase = Depends()) -> List[ProductOut]:
-    return await usecase.query()
+@router.get("/", status_code=200)
+async def query(
+    min_price: Optional[float] = Query(None, description="Preço mínimo"),
+    max_price: Optional[float] = Query(None, description="Preço máximo"),
+    usecase: ProductUsecase = Depends()
+) -> List[ProductOut]:
+    """
+    Lista produtos com filtros opcionais de preço.
+    Exemplo: /?min_price=5000&max_price=8000
+    """
+    return await usecase.query(min_price=min_price, max_price=max_price)
 
 
-@router.patch(path="/{id}", status_code=status.HTTP_200_OK)
+@router.patch("/{id}", status_code=status.HTTP_200_OK)
 async def patch(
-    id: UUID4 = Path(alias="id"),
+    id: UUID4 = Path(...),
     body: ProductUpdate = Body(...),
-    usecase: ProductUsecase = Depends(),
+    usecase: ProductUsecase = Depends()
 ) -> ProductUpdateOut:
-    return await usecase.update(id=id, body=body)
+    """
+    Atualiza um produto. 
+    - Retorna 404 se não encontrado.
+    - Atualiza updated_at automaticamente.
+    - Permite sobrescrever updated_at manualmente.
+    """
+    try:
+        if body.updated_at is None:
+            body.updated_at = datetime.utcnow()
+        return await usecase.update(id=id, body=body)
+    except NotFoundException as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=exc.message
+        )
 
 
 @router.delete(path="/{id}", status_code=status.HTTP_204_NO_CONTENT)
